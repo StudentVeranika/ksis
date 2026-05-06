@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mind Clash</title>
+    <link rel="stylesheet" href="/css/game.css">
+    <link rel="stylesheet" href="/css/modal.css">
+    <style>
+        .disconnect-notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1E293B;
+            border: 1px solid #ef4444;
+            border-radius: 28px;
+            padding: 24px 32px;
+            text-align: center;
+            z-index: 2000;
+            box-shadow: 0 25px 45px rgba(0,0,0,0.5);
+            backdrop-filter: blur(16px);
+        }
+        .disconnect-notification p { color: #F1F5F9; margin-bottom: 20px; font-size: 18px; }
+        .disconnect-notification button { background: #3b82f6; border: none; padding: 10px 24px; border-radius: 40px; color: white; cursor: pointer; }
+        .friend-playing-hint { background: #1E293B; border-radius: 28px; padding: 16px 24px; margin-top: 20px; color: #FACC15; font-size: 15px; border-left: 3px solid #FACC15; text-align: center; }
+        .victory-card h2 { font-size: 32px; font-weight: 700; margin: 16px 0; }
+        .victory-stats { color: #94A3B8; margin-top: 16px; font-size: 14px; }
+        .waiting-hint { background: #1E293B; border-radius: 28px; padding: 16px 24px; margin-top: 20px; color: #94A3B8; font-size: 15px; border-left: 3px solid #3b82f6; text-align: left; }
+        .timer-container { position: relative; width: 80px; height: 80px; margin: 0 auto 20px auto; }
+        .timer-svg { transform: rotate(-90deg); }
+        .timer-circle-bg { stroke: #334155; stroke-width: 6; fill: none; }
+        .timer-circle-progress { stroke: #3b82f6; stroke-width: 6; fill: none; stroke-linecap: round; transition: stroke-dashoffset 0.1s linear; }
+        .timer-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 28px; font-weight: bold; color: #F1F5F9; }
+        .timer-text.warning { color: #ef4444; animation: pulse 0.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .question-card { position: relative; }
+        .memory-number { font-size: 72px; font-weight: bold; color: #3b82f6; text-align: center; padding: 40px; font-family: monospace; letter-spacing: 10px; }
+        .memory-hidden { filter: blur(20px); user-select: none; }
+        .schulte-grid { display: grid; gap: 10px; justify-content: center; margin: 20px auto; max-width: 500px; }
+        .schulte-cell { background: #1E293B; border: 2px solid #334155; border-radius: 12px; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; color: #F1F5F9; cursor: pointer; transition: all 0.2s; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
+        .schulte-cell:hover:not(.clicked) { background: #3b82f6; transform: scale(1.02); }
+        .schulte-cell.clicked { background: #22c55e; border-color: #22c55e; cursor: default; opacity: 0.6; }
+        .schulte-progress { margin-top: 15px; font-size: 14px; color: #94A3B8; }
+        .schulte-timer { font-size: 18px; color: #FACC15; margin-bottom: 10px; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        .fade-out-message { position: fixed; bottom: 30%; left: 50%; transform: translateX(-50%); background: #1E293B; backdrop-filter: blur(12px); padding: 12px 28px; border-radius: 60px; font-weight: 500; z-index: 9999; animation: fadeOutAnim 1.8s forwards; box-shadow: 0 8px 20px rgba(0,0,0,0.3); color: white; border-left: 4px solid; }
+        @keyframes fadeOutAnim { 0% { opacity: 1; transform: translateX(-50%) translateY(0); } 70% { opacity: 1; } 100% { opacity: 0; visibility: hidden; transform: translateX(-50%) translateY(10px); } }
+        .answer-input:disabled, .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .leave-game-btn {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 40px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 100;
+            transition: 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: none;
+        }
+        .leave-game-btn:hover {
+            background: #dc2626;
+            transform: scale(1.02);
+        }
+        .leave-game-btn.show {
+            display: block;
+        }
+        .rules-icon {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 40px;
+            padding: 8px 18px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            z-index: 100;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .rules-icon:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.02);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1E293B;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b82f6;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<button class="profile-icon" id="profileBtn">
+    <span class="profile-avatar-small" id="headerAvatar">👤</span>
+    <span id="headerUsername">Профиль</span>
+</button>
+
+<button class="rules-icon" id="rulesBtn">Правила</button>
+
+<button id="leaveGameBtn" class="leave-game-btn">Покинуть игру</button>
+
+<div class="game-container">
+    <div id="progressPanel" class="progress-panel hidden">
+        <div class="player-progress you">
+            <div class="player-name">
+                <span class="player-avatar" id="player1Avatar">👤</span>
+                <span id="player1Name">Вы</span>
+            </div>
+            <div class="player-stats">🏆 <span id="player1Trophies">0</span> |  <span id="player1Correct">0</span></div>
+            <div class="progress-bar-container"><div class="progress-bar-fill" id="player1ProgressFill"></div></div>
+        </div>
+        <div class="player-progress opponent">
+            <div class="player-name">
+                <span class="player-avatar" id="player2Avatar">❓</span>
+                <span id="player2Name">Соперник</span>
+            </div>
+            <div class="player-stats">🏆 <span id="player2Trophies">0</span> |  <span id="player2Correct">0</span></div>
+            <div class="progress-bar-container"><div class="progress-bar-fill" id="player2ProgressFill"></div></div>
+        </div>
+    </div>
+
+    <div id="gameArea" class="hidden">
+        <div class="question-card">
+            <div class="timer-container">
+                <svg class="timer-svg" width="80" height="80" viewBox="0 0 80 80">
+                    <circle class="timer-circle-bg" cx="40" cy="40" r="34"></circle>
+                    <circle class="timer-circle-progress" id="timerCircle" cx="40" cy="40" r="34" stroke-dasharray="213.628" stroke-dashoffset="0"></circle>
+                </svg>
+                <div class="timer-text" id="timerText">7</div>
+            </div>
+            <div class="level-badge" id="levelBadge">Уровень 1 / 15</div>
+            <div class="question-image" id="questionImage">🧩</div>
+            <div id="dynamicContent"></div>
+            <div class="answer-area" id="answerArea">
+                <input type="text" id="answerInput" class="answer-input" placeholder="Введите ответ" autocomplete="off">
+                <button class="submit-btn" id="submitAnswerBtn">→</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="waitingArea" class="waiting-card hidden">
+        <div class="waiting-spinner"></div>
+        <h2>Ожидание соперника</h2>
+        <div id="waitingInfo" style="color:#9ca3af; font-size:14px; margin-top:8px;"></div>
+        <div class="waiting-hint">Ожидаем подключения друга...</div>
+    </div>
+
+    <div id="friendPlayingArea" class="waiting-card hidden">
+        <div class="waiting-spinner"></div>
+        <h2>Ожидание соперника</h2>
+        <div class="friend-playing-hint" id="friendPlayingHint">⏳ Вы ответили на все вопросы. Ожидаем завершения игры соперником...</div>
+        <button class="btn btn-secondary" id="cancelWaitBtn" style="margin-top: 24px; background: #475569;">Отмена</button>
+    </div>
+
+    <div id="victoryArea" class="victory-card hidden">
+        <div class="trophy-icon">🏆</div>
+        <h2 id="victoryMessage">ПОБЕДА</h2>
+        <div class="victory-stats" id="victoryStats"></div>
+        <button class="btn btn-primary" id="newGameBtn" style="width: auto; margin-top: 20px; padding: 12px 32px;">Новая игра</button>
+    </div>
+
+    <div id="inviteSection" class="invite-section">
+        <h2>Mind Clash</h2>
+        <div class="subhead">Дуэль знаний</div>
+        <select id="difficultySelect">
+            <option value="1">Лёгкий уровень</option>
+            <option value="2">Средний уровень</option>
+            <option value="3">Сложный уровень</option>
+        </select>
+        <input type="text" id="friendName" placeholder="Ник друга для приглашения">
+        <button class="btn btn-primary" id="inviteFriendBtn">Пригласить друга</button>
+        <a href="/" class="back-button">← На главную</a>
+    </div>
+
+    <div id="invitePopup" class="invite-popup hidden">
+        <div id="inviteContent"></div>
+    </div>
+</div>
+
+
+<div id="rulesModal" class="rules-modal hidden">
+    <div class="rules-modal-content">
+        <div class="rules-modal-header">
+            <h3>Правила игры</h3>
+            <button class="rules-close" id="closeRulesBtn">&times;</button>
+        </div>
+        <div class="rules-modal-body">
+            <div class="rule-section">
+                <h4>Общие правила</h4>
+                <p>Игра проходит в формате дуэли между двумя игроками. Побеждает тот, кто наберёт больше правильных ответов. Если один игрок отвечает правильно на все вопросы — он побеждает досрочно.</p>
+            </div>
+            <div class="rule-section">
+                <h4>Загадки (puzzle)</h4>
+                <p>На экране появляется текст загадки. Введите ответ в поле ввода. На ответ даётся 7 секунд. Регистр и лишние пробелы не учитываются.</p>
+            </div>
+            <div class="rule-section">
+                <h4>Запомни число (memory)</h4>
+                <p>На экране показывается число. Через 2 секунды оно скрывается. Введите запомненное число. На ответ даётся 7 секунд.</p>
+            </div>
+            <div class="rule-section">
+                <h4>Таблица Шульте (schulte)</h4>
+                <p>На экране появляется сетка с числами в случайном порядке. Нажимайте на клетки в порядке возрастания чисел от 1 до N. На выполнение даётся 15 секунд.</p>
+            </div>
+            <div class="rule-section">
+                <h4>Эффект Струпа (stroop)</h4>
+                <p>На экране показывается слово, написанное цветом, который может не совпадать со значением слова. Введите название цвета текста, а не прочитанное слово. Помните о букве Ё (жЁлтый, зелЁный)</p>
+            </div>
+
+        </div>
+        <div class="rules-modal-footer">
+            <button class="btn btn-primary" id="closeRulesFooterBtn">Понятно!</button>
+        </div>
+    </div>
+</div>
+
+
+<div id="profileModal" class="profile-modal hidden">
+    <div class="profile-modal-content">
+        <div class="profile-modal-header">
+            <h3>Мой профиль</h3>
+            <button class="profile-close" id="closeProfileBtn">&times;</button>
+        </div>
+        <div class="profile-modal-body">
+            <div class="profile-avatar-large" id="profileAvatar">👤</div>
+            <h2 style="text-align: center; color: #F1F5F9;" id="profileUsername">Загрузка...</h2>
+
+            <div class="profile-info">
+                <h4>🏆 Кубки</h4>
+                <div class="trophy-count" id="profileTrophies">0</div>
+            </div>
+
+            <div class="form-group">
+                <label>Новый пароль</label>
+                <input type="password" id="newPassword" placeholder="Оставьте пустым, если не хотите менять">
+            </div>
+
+            <div class="form-group">
+                <label>Подтверждение пароля</label>
+                <input type="password" id="confirmPassword" placeholder="Повторите новый пароль">
+            </div>
+
+            <div class="form-group">
+                <label>Аватар</label>
+                <select id="avatarSelect">
+                    <option value="cat.png">🐱 Кот</option>
+                    <option value="dog.png">🐶 Собака</option>
+                    <option value="robot.png">🤖 Робот</option>
+                    <option value="wizard.png">🧙‍♂️ Маг</option>
+                </select>
+            </div>
+
+            <div class="profile-buttons">
+                <button class="btn btn-primary" id="updateProfileBtn">Сохранить</button>
+                <button class="btn-logout" id="logoutBtn">Выйти</button>
+            </div>
+
+            <div id="profileMessage" class="message"></div>
+        </div>
+    </div>
+</div>
+
+<script src="/js/websocket-client.js"></script>
+<script>
+
+    let currentRoomId = null;
+    let currentLevelIndex = 0;
+    let totalLevels = 10;
+    let levelsData = [];
+    let currentRoomPlayer1Id = null;
+    let currentInviteId = null;
+    let waitingForAnswer = false;
+    let isProcessingAnswer = false;
+    let isWaitingForFriendFinish = false;
+    let gameOverReceived = false;
+    let gameActive = true;
+
+    let myUserId = null;
+
+    let myCorrectCount = 0;
+    let myAnsweredCount = 0;
+    let oppCorrectCount = 0;
+    let oppAnsweredCount = 0;
+
+    let finalMyCorrect = 0;
+    let finalOppCorrect = 0;
+
+    let opponentUsername = "Соперник";
+
+    let timerInterval = null;
+    let timeLeft = 7;
+    let currentTimeLimit = 7;
+    let timerActive = false;
+    let schulteTimerInterval = null;
+    let memoryShowTimeout = null;
+
+    let currentMemoryNumber = null;
+    let currentMemoryStage = 'showing';
+    let currentSchulteGrid = [];
+    let currentSchulteOrder = [];
+    let currentSchulteIndex = 0;
+    let schulteGridSize = 2;
+
+    let currentLevelType = null;
+
+    const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 34;
+
+
+    const leaveGameBtn = document.getElementById('leaveGameBtn');
+
+    leaveGameBtn.addEventListener('click', () => {
+        if (confirm('Вы уверены, что хотите покинуть игру? Соперник получит уведомление.')) {
+            if (currentRoomId) {
+                wsClient.send({
+                    type: 'leave_game',
+                    roomId: currentRoomId
+                });
+            }
+            resetToInviteScreen();
+            showTempMessage('Вы вышли из игры', 'info');
+        }
+    });
+
+
+    const rulesModal = document.getElementById('rulesModal');
+    const rulesBtn = document.getElementById('rulesBtn');
+    const closeRulesBtn = document.getElementById('closeRulesBtn');
+    const closeRulesFooterBtn = document.getElementById('closeRulesFooterBtn');
+
+    function openRulesModal() {
+        rulesModal.classList.remove('hidden');
+    }
+
+    function closeRulesModal() {
+        rulesModal.classList.add('hidden');
+    }
+
+    rulesBtn.addEventListener('click', openRulesModal);
+    closeRulesBtn.addEventListener('click', closeRulesModal);
+    closeRulesFooterBtn.addEventListener('click', closeRulesModal);
+    rulesModal.addEventListener('click', (e) => {
+        if (e.target === rulesModal) {
+            closeRulesModal();
+        }
+    });
+
+
+
+    const profileModal = document.getElementById('profileModal');
+    const closeProfileBtn = document.getElementById('closeProfileBtn');
+
+    function openProfileModal() {
+        loadProfileData();
+        profileModal.classList.remove('hidden');
+    }
+
+    function closeProfileModal() {
+        profileModal.classList.add('hidden');
+    }
+
+    function showProfileMessage(text, type) {
+        const msgDiv = document.getElementById('profileMessage');
+        msgDiv.textContent = text;
+        msgDiv.className = 'message ' + type;
+        setTimeout(() => {
+            msgDiv.className = 'message';
+        }, 3000);
+    }
+
+    function loadProfileData() {
+        const username = localStorage.getItem('username') || 'Профиль';
+        const avatar = localStorage.getItem('avatar');
+        const trophies = localStorage.getItem('trophies') || '0';
+
+        document.getElementById('profileUsername').textContent = username;
+        document.getElementById('profileTrophies').textContent = trophies;
+
+        const avatarMap = {
+            'cat.png': '🐱', 'dog.png': '🐶', 'robot.png': '🤖', 'wizard.png': '🧙‍♂️'
+        };
+        document.getElementById('profileAvatar').textContent = avatarMap[avatar] || '👤';
+        document.getElementById('avatarSelect').value = avatar || 'cat.png';
+
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmPassword').value = '';
+    }
+
+    closeProfileBtn.addEventListener('click', closeProfileModal);
+    profileModal.addEventListener('click', (e) => {
+        if (e.target === profileModal) {
+            closeProfileModal();
+        }
+    });
+
+    function goToNextLevel() {
+        if (!gameActive || gameOverReceived) return;
+
+        clearTimer();
+        if (schulteTimerInterval) clearInterval(schulteTimerInterval);
+        if (memoryShowTimeout) clearTimeout(memoryShowTimeout);
+
+        const hasNextLevel = (currentLevelIndex + 1) < totalLevels;
+
+        if (hasNextLevel) {
+            currentLevelIndex++;
+            if (levelsData[currentLevelIndex]) {
+                showQuestion(currentLevelIndex);
+            }
+        } else {
+            console.log(`Игрок закончил все вопросы. Правильных: ${myCorrectCount}/${totalLevels}`);
+            document.getElementById('gameArea').classList.add('hidden');
+            document.getElementById('friendPlayingArea').classList.remove('hidden');
+            document.getElementById('progressPanel').classList.remove('hidden');
+            isWaitingForFriendFinish = true;
+        }
+        isProcessingAnswer = false;
+        waitingForAnswer = true;
+    }
+
+    function sendAnswerToServer(answer, isCorrect) {
+        if (!gameActive || gameOverReceived) return;
+
+        if (isCorrect) {
+            myCorrectCount++;
+        }
+        myAnsweredCount++;
+        document.getElementById('player1Correct').textContent = myCorrectCount;
+
+        if (currentRoomId && answer !== null) {
+            wsClient.submitAnswer(currentRoomId, answer);
+        }
+    }
+
+    function finalizeAnswer(answer, isCorrect) {
+        if (!gameActive || gameOverReceived) return;
+        if (isProcessingAnswer) return;
+
+        isProcessingAnswer = true;
+        waitingForAnswer = false;
+
+        const answerInput = document.getElementById('answerInput');
+        const submitBtn = document.getElementById('submitAnswerBtn');
+        if (answerInput) answerInput.disabled = true;
+        if (submitBtn) submitBtn.disabled = true;
+
+        if (isCorrect) {
+            showTempMessage('Правильно!', 'success');
+        } else {
+            showTempMessage('Неправильно!', 'error');
+        }
+
+        sendAnswerToServer(answer, isCorrect);
+
+        setTimeout(() => {
+            goToNextLevel();
+        }, 800);
+    }
+
+    function startTimer(limit = 7) {
+        if (timerInterval) clearTimer();
+
+        currentTimeLimit = limit;
+        timeLeft = limit;
+        timerActive = true;
+        updateTimerDisplay();
+
+        timerInterval = setInterval(() => {
+            if (!timerActive || !gameActive || gameOverReceived) return;
+            timeLeft--;
+            updateTimerDisplay();
+
+            if (timeLeft <= 0) {
+                clearTimer();
+                timerActive = false;
+
+                if (waitingForAnswer && !isProcessingAnswer && gameActive && !gameOverReceived) {
+                    showTempMessage(' Время вышло!', 'error');
+                    finalizeAnswer("", false);
+                }
+            }
+        }, 1000);
+    }
+
+    function updateTimerDisplay() {
+        const timerTextElem = document.getElementById('timerText');
+        const timerCircle = document.getElementById('timerCircle');
+        if (!timerTextElem) return;
+
+        timerTextElem.textContent = timeLeft;
+
+        if (timeLeft <= 3) {
+            timerTextElem.classList.add('warning');
+        } else {
+            timerTextElem.classList.remove('warning');
+        }
+
+        const progress = timeLeft / currentTimeLimit;
+        const dashOffset = CIRCLE_CIRCUMFERENCE * (1 - progress);
+        timerCircle.style.strokeDashoffset = dashOffset;
+        timerCircle.style.stroke = timeLeft <= 3 ? '#ef4444' : '#3b82f6';
+    }
+
+    function clearTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        timerActive = false;
+    }
+
+    function showPuzzleQuestion(level) {
+        const dynamicContent = document.getElementById('dynamicContent');
+        const answerArea = document.getElementById('answerArea');
+        const imgContainer = document.getElementById('questionImage');
+
+        if (imgContainer) {
+            imgContainer.style.display = 'flex';
+            if (level.image_path && level.image_path !== 'null' && level.image_path !== '') {
+                imgContainer.innerHTML = `<img src="/${level.image_path}" alt="Вопрос">`;
+            } else {
+                imgContainer.innerHTML = '🧩';
+            }
+        }
+
+        if (dynamicContent) {
+            dynamicContent.innerHTML = `<div class="question-text" id="questionText">${escapeHtml(level.question)}</div>`;
+        }
+        if (answerArea) answerArea.style.display = 'flex';
+
+        const answerInput = document.getElementById('answerInput');
+        if (answerInput) {
+            answerInput.placeholder = 'Введите ответ';
+            answerInput.value = '';
+            answerInput.disabled = false;
+            answerInput.focus();
+        }
+
+        const submitBtn = document.getElementById('submitAnswerBtn');
+        if (submitBtn) submitBtn.disabled = false;
+
+        window.currentCorrectAnswer = level.correct_answer;
+        waitingForAnswer = true;
+        startTimer(7);
+    }
+
+    function showMemoryQuestion(level) {
+        const dynamicContent = document.getElementById('dynamicContent');
+        const answerArea = document.getElementById('answerArea');
+        const imgContainer = document.getElementById('questionImage');
+
+        if (imgContainer) imgContainer.style.display = 'none';
+        if (answerArea) answerArea.style.display = 'flex';
+
+        currentMemoryNumber = level.correct_answer;
+        currentMemoryStage = 'showing';
+        const displayTime = level.display_time || 2;
+
+        if (dynamicContent) {
+            dynamicContent.innerHTML = `
+                <div class="question-text">Запомните число!</div>
+                <div class="memory-number" id="memoryNumber">${escapeHtml(currentMemoryNumber)}</div>
+            `;
+        }
+
+        const answerInput = document.getElementById('answerInput');
+        if (answerInput) {
+            answerInput.placeholder = 'Введите запомненное число';
+            answerInput.value = '';
+            answerInput.disabled = false;
+        }
+
+        const submitBtn = document.getElementById('submitAnswerBtn');
+        if (submitBtn) submitBtn.disabled = false;
+
+        waitingForAnswer = true;
+        startTimer(7);
+
+        if (memoryShowTimeout) clearTimeout(memoryShowTimeout);
+        memoryShowTimeout = setTimeout(() => {
+            if (currentMemoryStage === 'showing') {
+                const memDiv = document.getElementById('memoryNumber');
+                if (memDiv) {
+                    memDiv.classList.add('memory-hidden');
+                    memDiv.textContent = '???';
+                }
+                currentMemoryStage = 'input';
+            }
+        }, displayTime * 1000);
+
+        window.currentCorrectAnswer = currentMemoryNumber;
+    }
+
+    function showSchulteQuestion(level) {
+        const dynamicContent = document.getElementById('dynamicContent');
+        const answerArea = document.getElementById('answerArea');
+        const imgContainer = document.getElementById('questionImage');
+
+        if (imgContainer) imgContainer.style.display = 'none';
+        if (answerArea) answerArea.style.display = 'none';
+
+        const gridSize = level.grid_size || 2;
+        schulteGridSize = gridSize;
+        const totalCells = gridSize * gridSize;
+
+        let numbers = Array.from({ length: totalCells }, (_, i) => i + 1);
+        for (let i = numbers.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+        }
+
+        currentSchulteGrid = numbers;
+        currentSchulteOrder = Array.from({ length: totalCells }, (_, i) => i + 1);
+        currentSchulteIndex = 0;
+
+        let gridHtml = `<div class="question-text">${escapeHtml(level.question)}</div>`;
+        gridHtml += `<div class="schulte-timer" id="schulteTimer">Осталось: 15 сек</div>`;
+        gridHtml += `<div class="schulte-grid" id="schulteGrid" style="grid-template-columns: repeat(${gridSize}, 1fr);">`;
+
+        for (let i = 0; i < totalCells; i++) {
+            gridHtml += `<div class="schulte-cell" data-value="${currentSchulteGrid[i]}" data-clicked="false">${currentSchulteGrid[i]}</div>`;
+        }
+        gridHtml += `</div>`;
+        gridHtml += `<div class="schulte-progress" id="schulteProgress">Прогресс: 0/${totalCells}</div>`;
+
+        if (dynamicContent) dynamicContent.innerHTML = gridHtml;
+
+        waitingForAnswer = true;
+
+        let schulteTimeLeft = 15;
+        if (schulteTimerInterval) clearInterval(schulteTimerInterval);
+        schulteTimerInterval = setInterval(() => {
+            if (!gameActive || gameOverReceived) return;
+            schulteTimeLeft--;
+            const timerDiv = document.getElementById('schulteTimer');
+            if (timerDiv) timerDiv.textContent = `Осталось: ${schulteTimeLeft} сек`;
+
+            if (schulteTimeLeft <= 0) {
+                clearInterval(schulteTimerInterval);
+                schulteTimerInterval = null;
+                if (waitingForAnswer && !isProcessingAnswer && gameActive && !gameOverReceived) {
+                    showTempMessage('Время вышло!', 'error');
+                    finalizeAnswer("", false);
+                }
+            }
+        }, 1000);
+
+        setTimeout(() => {
+            const cells = document.querySelectorAll('.schulte-cell');
+            cells.forEach(cell => {
+                cell.removeEventListener('click', schulteClickHandler);
+                cell.addEventListener('click', schulteClickHandler);
+            });
+        }, 50);
+    }
+
+    function schulteClickHandler(e) {
+        if (!gameActive || gameOverReceived || isProcessingAnswer || !waitingForAnswer) return;
+
+        const cell = e.currentTarget;
+        const value = parseInt(cell.dataset.value);
+        const isClicked = cell.dataset.clicked === 'true';
+
+        if (!isClicked && value === currentSchulteOrder[currentSchulteIndex]) {
+            cell.classList.add('clicked');
+            cell.dataset.clicked = 'true';
+            currentSchulteIndex++;
+
+            const progressSpan = document.getElementById('schulteProgress');
+            if (progressSpan) {
+                progressSpan.textContent = `Прогресс: ${currentSchulteIndex}/${currentSchulteOrder.length}`;
+            }
+
+            if (currentSchulteIndex === currentSchulteOrder.length) {
+                if (schulteTimerInterval) clearInterval(schulteTimerInterval);
+                showTempMessage('Правильно!', 'success');
+                finalizeAnswer(currentSchulteOrder.join(','), true);
+            }
+        } else if (!isClicked) {
+            showTempMessage('Неверный порядок!', 'error');
+            cell.style.animation = 'shake 0.3s ease';
+            setTimeout(() => { cell.style.animation = ''; }, 300);
+        }
+    }
+
+    function showStroopQuestion(level) {
+        const dynamicContent = document.getElementById('dynamicContent');
+        const answerArea = document.getElementById('answerArea');
+        const imgContainer = document.getElementById('questionImage');
+
+        if (imgContainer) imgContainer.style.display = 'none';
+        if (answerArea) answerArea.style.display = 'flex';
+
+        const colors = ['красный', 'синий', 'зелёный', 'жёлтый', 'фиолетовый', 'оранжевый', 'розовый', 'голубой', 'коричневый', 'серый'];
+        const randomWordIndex = Math.floor(Math.random() * colors.length);
+        const randomWord = colors[randomWordIndex];
+
+        const textColor = level.correct_answer;
+
+        const colorMap = {
+            'красный': '#ef4444',
+            'синий': '#3b82f6',
+            'зелёный': '#22c55e',
+            'жёлтый': '#eab308',
+            'фиолетовый': '#a855f7',
+            'оранжевый': '#f97316',
+            'розовый': '#ec4899',
+            'голубой': '#06b6d4',
+            'коричневый': '#78350f',
+            'серый': '#6b7280'
+        };
+
+        const displayColor = colorMap[textColor] || '#ffffff';
+
+        if (dynamicContent) {
+            dynamicContent.innerHTML = `
+                <div class="question-text" style="margin-bottom: 20px;">${escapeHtml(level.question)}</div>
+                <div class="stroop-word" style="font-size: 64px; font-weight: bold; text-align: center; padding: 40px; color: ${displayColor};">
+                    ${escapeHtml(randomWord)}
+                </div>
+            `;
+        }
+
+        const answerInput = document.getElementById('answerInput');
+        if (answerInput) {
+            answerInput.placeholder = 'Введите цвет текста';
+            answerInput.value = '';
+            answerInput.disabled = false;
+            answerInput.focus();
+        }
+
+        const submitBtn = document.getElementById('submitAnswerBtn');
+        if (submitBtn) submitBtn.disabled = false;
+
+        window.currentCorrectAnswer = level.correct_answer;
+        waitingForAnswer = true;
+        startTimer(7);
+    }
+
+    function showQuestion(levelIndex) {
+        if (!gameActive || gameOverReceived) return;
+        if (!levelsData || levelIndex >= levelsData.length) return;
+
+        const level = levelsData[levelIndex];
+        const levelBadge = document.getElementById('levelBadge');
+        if (levelBadge) {
+            levelBadge.textContent = `Уровень ${levelIndex + 1} / ${totalLevels}`;
+        }
+
+        if (memoryShowTimeout) clearTimeout(memoryShowTimeout);
+        if (schulteTimerInterval) clearInterval(schulteTimerInterval);
+
+        currentLevelType = level.type;
+
+        if (level.type === 'puzzle') {
+            showPuzzleQuestion(level);
+        } else if (level.type === 'memory') {
+            showMemoryQuestion(level);
+        } else if (level.type === 'schulte') {
+            showSchulteQuestion(level);
+        } else if (level.type === 'stroop') {
+            showStroopQuestion(level);
+        } else {
+            showPuzzleQuestion(level);
+        }
+    }
+
+    function handleTextAnswer() {
+        if (!gameActive || gameOverReceived || isProcessingAnswer || !waitingForAnswer) return;
+
+        const answerInput = document.getElementById('answerInput');
+        const answer = answerInput ? answerInput.value.trim() : '';
+
+        if (answer === "") {
+            showTempMessage('Введите ответ', 'error');
+            return;
+        }
+
+        const isCorrect = (answer.toLowerCase() === (window.currentCorrectAnswer || '').toLowerCase());
+        finalizeAnswer(answer, isCorrect);
+    }
+
+    function resetGameState() {
+        gameActive = false;
+        gameOverReceived = false;
+        currentMemoryStage = 'showing';
+        isProcessingAnswer = false;
+        waitingForAnswer = false;
+        isWaitingForFriendFinish = false;
+
+        clearTimer();
+        if (memoryShowTimeout) clearTimeout(memoryShowTimeout);
+        if (schulteTimerInterval) clearInterval(schulteTimerInterval);
+    }
+
+    function showTempMessage(message, type = 'success') {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'fade-out-message';
+        msgDiv.textContent = message;
+        if (type === 'success') msgDiv.style.borderLeftColor = '#22c55e';
+        else if (type === 'error') msgDiv.style.borderLeftColor = '#ef4444';
+        else msgDiv.style.borderLeftColor = '#3b82f6';
+        document.body.appendChild(msgDiv);
+        setTimeout(() => msgDiv.remove(), 1800);
+    }
+
+    function showDisconnectNotification(message, onOk) {
+        const existing = document.querySelector('.disconnect-notification');
+        if (existing) existing.remove();
+        const notif = document.createElement('div');
+        notif.className = 'disconnect-notification';
+        notif.innerHTML = `<p>${message}</p><button id="disconnectOkBtn">OK</button>`;
+        document.body.appendChild(notif);
+        document.getElementById('disconnectOkBtn').onclick = () => {
+            notif.remove();
+            if (onOk) onOk();
+        };
+    }
+
+    function resetToInviteScreen() {
+        resetGameState();
+
+        currentRoomId = null;
+        currentLevelIndex = 0;
+        levelsData = [];
+        myCorrectCount = 0;
+        myAnsweredCount = 0;
+        oppCorrectCount = 0;
+        oppAnsweredCount = 0;
+        finalMyCorrect = 0;
+        finalOppCorrect = 0;
+
+        document.getElementById('gameArea').classList.add('hidden');
+        document.getElementById('waitingArea').classList.add('hidden');
+        document.getElementById('friendPlayingArea').classList.add('hidden');
+        document.getElementById('victoryArea').classList.add('hidden');
+        document.getElementById('progressPanel').classList.add('hidden');
+        document.getElementById('inviteSection').classList.remove('hidden');
+
+        gameActive = true;
+        leaveGameBtn.classList.remove('show');
+    }
+
+    function updateHeaderProfile() {
+        const username = localStorage.getItem('username') || 'Профиль';
+        const avatar = localStorage.getItem('avatar');
+        const avatarMap = { 'cat.png': '🐱', 'dog.png': '🐶', 'robot.png': '🤖', 'wizard.png': '🧙‍♂️' };
+        document.getElementById('headerAvatar').textContent = avatarMap[avatar] || '👤';
+        document.getElementById('headerUsername').textContent = username.length > 10 ? username.substring(0, 10) + '...' : username;
+    }
+
+    function showInvitePopup(inviteId, fromUsername) {
+        currentInviteId = inviteId;
+        const popup = document.getElementById('invitePopup');
+        const content = document.getElementById('inviteContent');
+        content.innerHTML = `
+            <strong style="color: white;">Приглашение!</strong><br>
+            <span style="color: white;">${fromUsername}</span> <span style="color: white;">приглашает вас сыграть</span><br>
+            <button class="btn btn-primary" id="acceptInviteBtn" style="margin-top: 10px;">Принять</button>
+            <button class="btn" id="rejectInviteBtn" style="background:#475569;">Отклонить</button>
+        `;
+        popup.classList.remove('hidden');
+        document.getElementById('acceptInviteBtn').onclick = () => { wsClient.acceptInvite(inviteId); popup.classList.add('hidden'); };
+        document.getElementById('rejectInviteBtn').onclick = () => { wsClient.rejectInvite(); popup.classList.add('hidden'); };
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+
+
+    wsClient.on('open', () => {
+        const userId = localStorage.getItem('userId');
+        const username = localStorage.getItem('username');
+        const password = localStorage.getItem('password');
+        if (userId && username && password) wsClient.login(username, password);
+        else window.location = '/login.html';
+    });
+
+    wsClient.on('login_success', (data) => {
+        myUserId = data.userId;
+        document.getElementById('player1Name').textContent = data.username;
+        document.getElementById('player1Trophies').textContent = data.trophies || 0;
+        const avatar = localStorage.getItem('avatar');
+        const avatarMap = { 'cat.png': '🐱', 'dog.png': '🐶', 'robot.png': '🤖', 'wizard.png': '🧙‍♂️' };
+        document.getElementById('player1Avatar').textContent = avatarMap[avatar] || '👤';
+        updateHeaderProfile();
+    });
+
+    wsClient.on('login_error', () => { window.location = '/login.html'; });
+
+    wsClient.on('room_created', (data) => {
+        currentRoomId = data.roomId;
+        currentRoomPlayer1Id = parseInt(localStorage.getItem('userId'));
+        document.getElementById('inviteSection').classList.add('hidden');
+        document.getElementById('progressPanel').classList.remove('hidden');
+        document.getElementById('waitingArea').classList.remove('hidden');
+        document.getElementById('friendPlayingArea').classList.add('hidden');
+        document.getElementById('gameArea').classList.add('hidden');
+        document.getElementById('waitingInfo').innerHTML = `Ожидание присоединения друга...`;
+    });
+
+    wsClient.on('game_start', (data) => {
+        resetGameState();
+        gameActive = true;
+        gameOverReceived = false;
+        currentMemoryStage = 'showing';
+
+        currentRoomId = data.roomId;
+        totalLevels = data.totalLevels || 10;
+        currentLevelIndex = 0;
+        levelsData = data.levels || [];
+        waitingForAnswer = false;
+        isWaitingForFriendFinish = false;
+
+        myCorrectCount = 0;
+        myAnsweredCount = 0;
+        oppCorrectCount = 0;
+        oppAnsweredCount = 0;
+        finalMyCorrect = 0;
+        finalOppCorrect = 0;
+
+        opponentUsername = data.opponentUsername || "Соперник";
+
+        if (data.player1Id) {
+            currentRoomPlayer1Id = data.player1Id;
+        } else {
+            const myUsername = localStorage.getItem('username');
+            if (opponentUsername !== myUsername) {
+                currentRoomPlayer1Id = myUserId;
+            } else {
+                currentRoomPlayer1Id = -1;
+            }
+        }
+
+        console.log(`Game start: myUserId=${myUserId}, player1Id=${currentRoomPlayer1Id}, opponent=${opponentUsername}`);
+
+        document.getElementById('player2Name').textContent = opponentUsername;
+        document.getElementById('player1Correct').textContent = '0';
+        document.getElementById('player2Correct').textContent = '0';
+        document.getElementById('player1ProgressFill').style.width = '0%';
+        document.getElementById('player2ProgressFill').style.width = '0%';
+
+        document.getElementById('waitingArea').classList.add('hidden');
+        document.getElementById('friendPlayingArea').classList.add('hidden');
+        document.getElementById('gameArea').classList.remove('hidden');
+        document.getElementById('progressPanel').classList.remove('hidden');
+
+        leaveGameBtn.classList.add('show');
+
+        if (levelsData.length > 0) showQuestion(0);
+    });
+
+    wsClient.on('invite', (data) => { showInvitePopup(data.inviteId, data.fromUsername); });
+    wsClient.on('invite_accepted', (data) => { currentRoomId = data.roomId; });
+
+    wsClient.on('answer_result', (data) => {
+        console.log('answer_result received:', data);
+    });
+
+    wsClient.on('progress_update', (data) => {
+        if (gameOverReceived) return;
+
+        const amIPlayer1 = (currentRoomPlayer1Id === myUserId);
+
+        let myCorrect, myAnswered, oppCorrect, oppAnswered;
+
+        if (amIPlayer1) {
+            myCorrect = data.player1Correct;
+            myAnswered = data.player1Answered;
+            oppCorrect = data.player2Correct;
+            oppAnswered = data.player2Answered;
+        } else {
+            myCorrect = data.player2Correct;
+            myAnswered = data.player2Answered;
+            oppCorrect = data.player1Correct;
+            oppAnswered = data.player1Answered;
+        }
+
+        myCorrectCount = myCorrect;
+        myAnsweredCount = myAnswered;
+        oppCorrectCount = oppCorrect;
+        oppAnsweredCount = oppAnswered;
+
+        finalMyCorrect = myCorrect;
+        finalOppCorrect = oppCorrect;
+
+        console.log(`Progress: amIPlayer1=${amIPlayer1}, myCorrect=${myCorrect}, oppCorrect=${oppCorrect}`);
+
+        document.getElementById('player1Correct').textContent = myCorrect;
+        document.getElementById('player2Correct').textContent = oppCorrect;
+
+        const myPercent = (myAnswered / totalLevels) * 100;
+        const oppPercent = (oppAnswered / totalLevels) * 100;
+        document.getElementById('player1ProgressFill').style.width = myPercent + '%';
+        document.getElementById('player2ProgressFill').style.width = oppPercent + '%';
+
+        if (isWaitingForFriendFinish) {
+            document.getElementById('friendPlayingHint').innerHTML = `⏳ Ожидаем завершения игры соперником... (${oppAnswered}/${totalLevels} вопросов)`;
+        }
+    });
+
+    wsClient.on('profile_updated', (data) => {
+        console.log('profile_updated:', data);
+        if (data.success) {
+            if (data.password) {
+                localStorage.setItem('password', data.password);
+            }
+            if (data.avatar) {
+                localStorage.setItem('avatar', data.avatar);
+                const avatarMap = { 'cat.png': '🐱', 'dog.png': '🐶', 'robot.png': '🤖', 'wizard.png': '🧙‍♂️' };
+                document.getElementById('headerAvatar').textContent = avatarMap[data.avatar] || '👤';
+                document.getElementById('profileAvatar').textContent = avatarMap[data.avatar] || '👤';
+            }
+            showProfileMessage('Профиль обновлён!', 'success');
+            loadProfileData();
+        } else {
+            showProfileMessage(data.error || 'Ошибка обновления', 'error');
+        }
+    });
+
+    wsClient.on('game_over', (data) => {
+        if (gameOverReceived) return;
+        gameOverReceived = true;
+        gameActive = false;
+
+        clearTimer();
+        if (schulteTimerInterval) clearInterval(schulteTimerInterval);
+        if (memoryShowTimeout) clearTimeout(memoryShowTimeout);
+
+        const winnerId = parseInt(data.winnerId);
+
+        console.log(`Game over: winnerId=${winnerId}, myUserId=${myUserId}`);
+        console.log(`Final scores - My: ${finalMyCorrect}, Opp: ${finalOppCorrect}`);
+
+        document.getElementById('gameArea').classList.add('hidden');
+        document.getElementById('friendPlayingArea').classList.add('hidden');
+        document.getElementById('waitingArea').classList.add('hidden');
+        document.getElementById('progressPanel').classList.add('hidden');
+        document.getElementById('victoryArea').classList.remove('hidden');
+
+        leaveGameBtn.classList.remove('show');
+
+        if (winnerId === -1) {
+            document.getElementById('victoryMessage').innerHTML = '🤝 НИЧЬЯ!';
+            document.getElementById('victoryStats').innerHTML = `Оба ответили правильно на ${finalMyCorrect} из ${totalLevels} вопросов`;
+        } else if (myUserId === winnerId) {
+            document.getElementById('victoryMessage').innerHTML = '🏆 ПОБЕДА! 🏆';
+            document.getElementById('victoryStats').innerHTML = `Вы: ${finalMyCorrect} / ${opponentUsername}: ${finalOppCorrect}`;
+            const currentTrophies = parseInt(localStorage.getItem('trophies') || '0');
+            localStorage.setItem('trophies', currentTrophies + 1);
+            document.getElementById('player1Trophies').textContent = currentTrophies + 1;
+            updateHeaderProfile();
+        } else {
+            document.getElementById('victoryMessage').innerHTML = '💔 ПОРАЖЕНИЕ 💔';
+            document.getElementById('victoryStats').innerHTML = `Вы: ${finalMyCorrect} / ${opponentUsername}: ${finalOppCorrect}`;
+        }
+    });
+
+    wsClient.on('opponent_disconnected', () => {
+        if (gameOverReceived) return;
+        resetGameState();
+        showDisconnectNotification('Соперник отключился. Игра завершена.', () => {
+            resetToInviteScreen();
+        });
+        gameOverReceived = true;
+    });
+
+    wsClient.on('opponent_left', (data) => {
+        showDisconnectNotification('Соперник покинул игру. Игра завершена.', () => {
+            resetToInviteScreen();
+        });
+    });
+
+    document.getElementById('profileBtn').onclick = () => {
+        openProfileModal();
+    };
+
+    document.getElementById('updateProfileBtn').onclick = () => {
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const newAvatar = document.getElementById('avatarSelect').value;
+
+        if (newPassword && newPassword !== confirmPassword) {
+            showProfileMessage('Пароли не совпадают', 'error');
+            return;
+        }
+
+        if (wsClient.connected && wsClient.socket) {
+            const updateData = { type: 'update_profile' };
+            if (newPassword) updateData.password = newPassword;
+            if (newAvatar) updateData.avatar = newAvatar;
+            wsClient.socket.send(JSON.stringify(updateData));
+            showProfileMessage('Отправка...', 'success');
+        } else {
+            showProfileMessage('WebSocket не подключен', 'error');
+        }
+    };
+
+    document.getElementById('logoutBtn').onclick = () => {
+        localStorage.clear();
+        window.location = '/login.html';
+    };
+
+    document.getElementById('inviteFriendBtn').onclick = () => {
+        const friendName = document.getElementById('friendName').value.trim();
+        const difficulty = document.getElementById('difficultySelect').value;
+        if (friendName) {
+            wsClient.invite(friendName, parseInt(difficulty));
+            document.getElementById('friendName').value = '';
+            showTempMessage(`Приглашение отправлено ${friendName}`, 'success');
+        } else {
+            showTempMessage('Введите ник друга', 'error');
+        }
+    };
+
+    document.getElementById('submitAnswerBtn').onclick = () => {
+        handleTextAnswer();
+    };
+
+    document.getElementById('answerInput').onkeypress = (e) => {
+        if (e.key === 'Enter') {
+            handleTextAnswer();
+        }
+    };
+
+    document.getElementById('newGameBtn').onclick = () => {
+        resetToInviteScreen();
+    };
+
+    document.getElementById('cancelWaitBtn').onclick = () => {
+        resetToInviteScreen();
+        showTempMessage('Вы вышли из игры', 'info');
+    };
+
+    if (!localStorage.getItem('userId')) {
+        window.location = '/login.html';
+    }
+    updateHeaderProfile();
+    wsClient.connect();
+</script>
+</body>
+</html>

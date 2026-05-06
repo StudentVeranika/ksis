@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Mind Clash</title>
+    <link rel="stylesheet" href="/css/style.css">
+
+</head>
+<body>
+<div class="container">
+    <h1 class="game-title">🎲 MIND CLASH</h1>
+
+
+    <div class="solo-buttons">
+        <button class="solo-btn" onclick="startSolo('puzzle')"> ЭРУДИЦИЯ</button>
+        <button class="solo-btn" onclick="startSolo('memory')"> ЗАПОМНИ ЧИСЛО</button>
+        <button class="solo-btn" onclick="startSolo('schulte')"> ТАБЛИЦА ШУЛЬТЕ</button>
+        <button class="solo-btn" onclick="startSolo('stroop')"> ЭФФЕКТ СТРУПА</button>
+        <button class="solo-btn" onclick="startSolo('mixed')"> КОМБО ЗАДАНИЙ</button>
+    </div>
+
+    <hr>
+
+
+    <div class="duel-section">
+        <a href="/login.html" class="play-button"> ИГРАТЬ С ДРУГОМ</a>
+    </div>
+</div>
+
+<script>
+    function startSolo(mode) {
+        localStorage.setItem('soloMode', mode);
+        window.location = '/solo.html';
+    }
+</script>
+</body>
+</html>

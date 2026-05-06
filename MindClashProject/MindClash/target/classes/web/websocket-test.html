@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Тест WebSocket</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="container">
+    <h2>Тест WebSocket</h2>
+    <div id="status" style="color: red;">Отключено</div>
+    <div id="log" style="height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin: 10px 0;"></div>
+
+    <button onclick="testConnect()">Подключиться</button>
+    <button onclick="testPing()">Ping</button>
+    <button onclick="testLogin()">Тестовый вход</button>
+    <button onclick="testDisconnect()">Отключиться</button>
+
+    <div style="margin-top: 20px;">
+        <input type="text" id="username" placeholder="Логин" value="veronika">
+        <input type="password" id="password" placeholder="Пароль" value="12345">
+    </div>
+</div>
+
+<script src="/js/websocket-client.js"></script>
+<script>
+    function log(message) {
+        const logDiv = document.getElementById('log');
+        logDiv.innerHTML += '<div>' + new Date().toLocaleTimeString() + ': ' + message + '</div>';
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    wsClient.on('open', () => {
+        document.getElementById('status').style.color = 'green';
+        document.getElementById('status').innerHTML = 'Подключено';
+        log('Подключено к серверу');
+    });
+
+    wsClient.on('close', () => {
+        document.getElementById('status').style.color = 'red';
+        document.getElementById('status').innerHTML = 'Отключено';
+        log('Отключено от сервера');
+    });
+
+    wsClient.on('pong', () => {
+        log('Получен pong от сервера');
+    });
+
+    wsClient.on('login_success', (data) => {
+        log('Вход выполнен: ' + data.username + ' (ID: ' + data.userId + ')');
+    });
+
+    wsClient.on('login_error', (data) => {
+        log('Ошибка входа: ' + data.error);
+    });
+
+    wsClient.on('echo', (data) => {
+        log('Эхо: ' + data.data);
+    });
+
+    wsClient.on('*', (data) => {
+        log('Тип: ' + data.type);
+    });
+
+    function testConnect() {
+        wsClient.connect();
+    }
+
+    function testPing() {
+        wsClient.ping();
+        log('Отправлен ping');
+    }
+
+    function testLogin() {
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        wsClient.login(username, password);
+        log('Отправлен запрос входа для ' + username);
+    }
+
+    function testDisconnect() {
+        wsClient.disconnect();
+    }
+
+    window.onload = function() {
+        setTimeout(() => wsClient.connect(), 500);
+    };
+</script>
+</body>
+</html>

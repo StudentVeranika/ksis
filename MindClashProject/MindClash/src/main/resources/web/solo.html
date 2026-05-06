@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title> Тренировка</title>
+    <link rel="stylesheet" href="/css/solo.css">
+</head>
+<body>
+
+<a href="/" class="back-btn">← На главную</a>
+
+<div class="game-container">
+    <div id="modeBadge" class="mode-badge"></div>
+
+    <div class="game-stats">
+        Прогресс: <span id="progressCount">0</span> / <span id="totalCount">0</span>
+    </div>
+
+    <div id="gameArea">
+        <div class="question-card">
+            <div class="timer-container">
+                <svg class="timer-svg" width="80" height="80" viewBox="0 0 80 80">
+                    <circle class="timer-circle-bg" cx="40" cy="40" r="34"></circle>
+                    <circle class="timer-circle-progress" id="timerCircle" cx="40" cy="40" r="34" stroke-dasharray="213.628" stroke-dashoffset="0"></circle>
+                </svg>
+                <div class="timer-text" id="timerText">7</div>
+            </div>
+            <div class="level-badge" id="levelBadge">Вопрос 1</div>
+            <div class="question-image" id="questionImage">🧩</div>
+            <div id="dynamicContent"></div>
+            <div class="answer-area" id="answerArea">
+                <input type="text" id="answerInput" class="answer-input" placeholder="Введите ответ" autocomplete="off">
+                <button class="submit-btn" id="submitAnswerBtn">→</button>
+            </div>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 30px;">
+        <button id="restartBtn" class="restart-btn"> Новый раунд</button>
+    </div>
+
+    <div id="completeArea" class="complete-message hidden">
+
+        <p>Вы прошли все вопросы!</p>
+        <button onclick="location.reload()" class="restart-btn"> Ещё раз</button>
+        <a href="/" class="back-btn" style="position: static; margin-top: 15px; display: inline-block;">← На главную</a>
+    </div>
+</div>
+
+<script>
+
+    let currentLevelIndex = 0;
+    let totalLevels = 0;
+    let levelsData = [];
+    let waitingForAnswer = false;
+    let isProcessingAnswer = false;
+    let gameActive = true;
+    let currentCorrectAnswer = null;
+    let questionsAnswered = 0;
+
+    let timerInterval = null;
+    let timeLeft = 7;
+    let currentTimeLimit = 7;
+    let timerActive = false;
+    let schulteTimerInterval = null;
+    let memoryShowTimeout = null;
+
+    let currentMemoryNumber = null;
+    let currentMemoryStage = 'showing';
+    let currentSchulteGrid = [];
+    let currentSchulteOrder = [];
+    let currentSchulteIndex = 0;
+    let schulteGridSize = 2;
+
+    const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 34;
+
+    const soloMode = localStorage.getItem('soloMode') || 'mixed';
+
+    const modeNames = {
+        'puzzle': ' ЗАГАДКИ',
+        'memory': ' ЗАПОМНИ ЧИСЛО',
+        'schulte': ' ТАБЛИЦА ШУЛЬТЕ',
+        'stroop': ' ЭФФЕКТ СТРУПА',
+        'mixed': ' ПЕРЕМЕШАННО'
+    };
+
+    document.getElementById('modeBadge').innerHTML = modeNames[soloMode] || 'ТРЕНИРОВКА';
+
+
+    async function loadLevels() {
+        try {
+            let url = `/api/solo/${soloMode}?count=8`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.levels && data.levels.length > 0) {
+                levelsData = data.levels;
+            } else {
+                console.warn('Сервер не вернул задания');
+                showError();
+                return;
+            }
+
+            totalLevels = levelsData.length;
+            document.getElementById('totalCount').textContent = totalLevels;
+
+            if (levelsData.length > 0) {
+                showQuestion(0);
+            } else {
+                document.getElementById('dynamicContent').innerHTML = '<div class="question-text">Нет заданий для выбранного режима</div>';
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки:', error);
+            showError();
+        }
+    }
+
+    function showError() {
+        document.getElementById('dynamicContent').innerHTML = '<div class="question-text"> Ошибка загрузки заданий. Пожалуйста, обновите страницу.</div>';
+    }
+
+
+    function goToNextLevel() {
+        if (!gameActive) return;
+
+        clearTimer();
+        if (schulteTimerInterval) clearInterval(schulteTimerInterval);
+        if (memoryShowTimeout) clearTimeout(memoryShowTimeout);
+
+        questionsAnswered++;
+        document.getElementById('progressCount').textContent = questionsAnswered;
+
+        const hasNextLevel = (currentLevelIndex + 1) < totalLevels;
+
+        if (hasNextLevel) {
+            currentLevelIndex++;
+            if (levelsData[currentLevelIndex]) {
+                showQuestion(currentLevelIndex);
+            }
+        } else {
+            gameActive = false;
+            document.getElementById('gameArea').style.display = 'none';
+            document.getElementById('completeArea').classList.remove('hidden');
+        }
+        isProcessingAnswer = false;
+        waitingForAnswer = true;
+    }
+
+    function finalizeAnswer(answer, isCorrect) {
+        if (!gameActive || isProcessingAnswer) return;
+
+        isProcessingAnswer = true;
+        waitingForAnswer = false;
+
+        const answerInput = document.getElementById('answerInput');
+        const submitBtn = document.getElementById('submitAnswerBtn');
+        if (answerInput) answerInput.disabled = true;
+        if (submitBtn) submitBtn.disabled = true;
+
+        if (isCorrect) {
+            showTempMessage('Правильно!', 'success');
+        } else {
+            showTempMessage('Неправильно!', 'error');
+        }
+
+        setTimeout(() => {
+            goToNextLevel();
+        }, 800);
+    }
+
+    function showTempMessage(message, type) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'fade-out-message';
+        msgDiv.textContent = message;
+        if (type === 'success') msgDiv.style.borderLeftColor = '#22c55e';
+        else msgDiv.style.borderLeftColor = '#ef4444';
+        document.body.appendChild(msgDiv);
+        setTimeout(() => msgDiv.remove(), 1800);
+    }
+
+    function startTimer(limit = 7) {
+        if (timerInterval) clearTimer();
+        currentTimeLimit = limit;
+        timeLeft = limit;
+        timerActive = true;
+        updateTimerDisplay();
+
+        timerInterval = setInterval(() => {
+            if (!timerActive || !gameActive) return;
+            timeLeft--;
+            updateTimerDisplay();
+            if (timeLeft <= 0) {
+                clearTimer();
+                timerActive = false;
+                if (waitingForAnswer && !isProcessingAnswer && gameActive) {
+                    showTempMessage('Время вышло!', 'error');
+                    finalizeAnswer("", false);
+                }
+            }
+        }, 1000);
+    }
+
+    function updateTimerDisplay() {
+        const timerTextElem = document.getElementById('timerText');
+        const timerCircle = document.getElementById('timerCircle');
+        if (!timerTextElem) return;
+        timerTextElem.textContent = timeLeft;
+        if (timeLeft <= 3) {
+            timerTextElem.classList.add('warning');
+        } else {
+            timerTextElem.classList.remove('warning');
+        }
+        const progress = timeLeft / currentTimeLimit;
+        const dashOffset = CIRCLE_CIRCUMFERENCE * (1 - progress);
+        timerCircle.style.strokeDashoffset = dashOffset;
+        timerCircle.style.stroke = timeLeft <= 3 ? '#ef4444' : '#3b82f6';
+    }
+
+    function clearTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        timerActive = false;
+    }
+
+    function showPuzzleQuestion(level) {
+        const dynamicContent = document.getElementById('dynamicContent');
+        const answerArea = document.getElementById('answerArea');
+        const imgContainer = document.getElementById('questionImage');
+
+        if (imgContainer) {
+            imgContainer.style.display = 'flex';
+            imgContainer.innerHTML = '🧩';
+        }
+        if (dynamicContent) {
+            dynamicContent.innerHTML = `<div class="question-text">${escapeHtml(level.question)}</div>`;
+        }
+        if (answerArea) answerArea.style.display = 'flex';
+
+        const answerInput = document.getElementById('answerInput');
+        if (answerInput) {
+            answerInput.placeholder = 'Введите ответ';
+            answerInput.value = '';
+            answerInput.disabled = false;
+            answerInput.focus();
+        }
+        document.getElementById('submitAnswerBtn').disabled = false;
+
+        currentCorrectAnswer = level.correct_answer;
+        waitingForAnswer = true;
+        startTimer(7);
+    }
+
+    function showMemoryQuestion(level) {
+        const dynamicContent = document.getElementById('dynamicContent');
+        const answerArea = document.getElementById('answerArea');
+        const imgContainer = document.getElementById('questionImage');
+
+        if (imgContainer) imgContainer.style.display = 'none';
+        if (answerArea) answerArea.style.display = 'flex';
+
+        currentMemoryNumber = level.correct_answer;
+        currentMemoryStage = 'showing';
+        const displayTime = level.display_time || 2;
+
+        if (dynamicContent) {
+            dynamicContent.innerHTML = `
+                <div class="question-text">Запомните число!</div>
+                <div class="memory-number" id="memoryNumber">${escapeHtml(currentMemoryNumber)}</div>
+            `;
+        }
+
+        const answerInput = document.getElementById('answerInput');
+        if (answerInput) {
+            answerInput.placeholder = 'Введите запомненное число';
+            answerInput.value = '';
+            answerInput.disabled = false;
+        }
+        document.getElementById('submitAnswerBtn').disabled = false;
+
+        waitingForAnswer = true;
+        startTimer(7);
+
+        if (memoryShowTimeout) clearTimeout(memoryShowTimeout);
+        memoryShowTimeout = setTimeout(() => {
+            if (currentMemoryStage === 'showing') {
+                const memDiv = document.getElementById('memoryNumber');
+                if (memDiv) {
+                    memDiv.classList.add('memory-hidden');
+                    memDiv.textContent = '???';
+                }
+                currentMemoryStage = 'input';
+            }
+        }, displayTime * 1000);
+
+        currentCorrectAnswer = currentMemoryNumber;
+    }
+
+    function showSchulteQuestion(level) {
+        const dynamicContent = document.getElementById('dynamicContent');
+        const answerArea = document.getElementById('answerArea');
+        const imgContainer = document.getElementById('questionImage');
+
+        if (imgContainer) imgContainer.style.display = 'none';
+        if (answerArea) answerArea.style.display = 'none';
+
+        const gridSize = level.grid_size || 2;
+        schulteGridSize = gridSize;
+        const totalCells = gridSize * gridSize;
+
+        let numbers = Array.from({ length: totalCells }, (_, i) => i + 1);
+        for (let i = numbers.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+        }
+
+        currentSchulteGrid = numbers;
+        currentSchulteOrder = Array.from({ length: totalCells }, (_, i) => i + 1);
+        currentSchulteIndex = 0;
+
+        let gridHtml = `<div class="question-text">${escapeHtml(level.question)}</div>`;
+        gridHtml += `<div class="schulte-timer" id="schulteTimer"> Осталось: 15 сек</div>`;
+        gridHtml += `<div class="schulte-grid" id="schulteGrid" style="grid-template-columns: repeat(${gridSize}, 1fr);">`;
+
+        for (let i = 0; i < totalCells; i++) {
+            gridHtml += `<div class="schulte-cell" data-value="${currentSchulteGrid[i]}" data-clicked="false">${currentSchulteGrid[i]}</div>`;
+        }
+        gridHtml += `</div>`;
+        gridHtml += `<div class="schulte-progress" id="schulteProgress">Прогресс: 0/${totalCells}</div>`;
+
+        if (dynamicContent) dynamicContent.innerHTML = gridHtml;
+
+        waitingForAnswer = true;
+
+        let schulteTimeLeft = 15;
+        if (schulteTimerInterval) clearInterval(schulteTimerInterval);
+        schulteTimerInterval = setInterval(() => {
+            if (!gameActive) return;
+            schulteTimeLeft--;
+            const timerDiv = document.getElementById('schulteTimer');
+            if (timerDiv) timerDiv.textContent = ` Осталось: ${schulteTimeLeft} сек`;
+            if (schulteTimeLeft <= 0) {
+                clearInterval(schulteTimerInterval);
+                if (waitingForAnswer && !isProcessingAnswer && gameActive) {
+                    showTempMessage('Время вышло!', 'error');
+                    finalizeAnswer("", false);
+                }
+            }
+        }, 1000);
+
+        setTimeout(() => {
+            const cells = document.querySelectorAll('.schulte-cell');
+            cells.forEach(cell => {
+                cell.removeEventListener('click', schulteClickHandler);
+                cell.addEventListener('click', schulteClickHandler);
+            });
+        }, 50);
+    }
+
+    function schulteClickHandler(e) {
+        if (!gameActive || isProcessingAnswer || !waitingForAnswer) return;
+
+        const cell = e.currentTarget;
+        const value = parseInt(cell.dataset.value);
+        const isClicked = cell.dataset.clicked === 'true';
+
+        if (!isClicked && value === currentSchulteOrder[currentSchulteIndex]) {
+            cell.classList.add('clicked');
+            cell.dataset.clicked = 'true';
+            currentSchulteIndex++;
+
+            const progressSpan = document.getElementById('schulteProgress');
+            if (progressSpan) {
+                progressSpan.textContent = `Прогресс: ${currentSchulteIndex}/${currentSchulteOrder.length}`;
+            }
+
+            if (currentSchulteIndex === currentSchulteOrder.length) {
+                if (schulteTimerInterval) clearInterval(schulteTimerInterval);
+                showTempMessage('Правильно!', 'success');
+                finalizeAnswer(currentSchulteOrder.join(','), true);
+            }
+        } else if (!isClicked) {
+            showTempMessage('Неверный порядок!', 'error');
+            cell.style.animation = 'shake 0.3s ease';
+            setTimeout(() => { cell.style.animation = ''; }, 300);
+        }
+    }
+
+    function showStroopQuestion(level) {
+        const dynamicContent = document.getElementById('dynamicContent');
+        const answerArea = document.getElementById('answerArea');
+        const imgContainer = document.getElementById('questionImage');
+
+        if (imgContainer) imgContainer.style.display = 'none';
+        if (answerArea) answerArea.style.display = 'flex';
+
+        const colors = ['красный', 'синий', 'зелёный', 'жёлтый', 'фиолетовый', 'оранжевый', 'розовый', 'голубой', 'коричневый', 'серый'];
+        const randomWordIndex = Math.floor(Math.random() * colors.length);
+        const randomWord = colors[randomWordIndex];
+
+        const textColor = level.correct_answer;
+
+        const colorMap = {
+            'красный': '#ef4444',
+            'синий': '#3b82f6',
+            'зелёный': '#22c55e',
+            'жёлтый': '#eab308',
+            'фиолетовый': '#a855f7',
+            'оранжевый': '#f97316',
+            'розовый': '#ec4899',
+            'голубой': '#06b6d4',
+            'коричневый': '#78350f',
+            'серый': '#6b7280'
+        };
+
+        const displayColor = colorMap[textColor] || '#ffffff';
+
+        if (dynamicContent) {
+            dynamicContent.innerHTML = `
+                <div class="question-text" style="margin-bottom: 20px;">${escapeHtml(level.question)}</div>
+                <div class="stroop-word" style="color: ${displayColor}">${escapeHtml(randomWord)}</div>
+            `;
+        }
+
+        const answerInput = document.getElementById('answerInput');
+        if (answerInput) {
+            answerInput.placeholder = 'Введите цвет текста';
+            answerInput.value = '';
+            answerInput.disabled = false;
+        }
+        document.getElementById('submitAnswerBtn').disabled = false;
+
+        currentCorrectAnswer = level.correct_answer;
+        waitingForAnswer = true;
+        startTimer(7);
+    }
+
+    function showQuestion(levelIndex) {
+        const level = levelsData[levelIndex];
+        document.getElementById('levelBadge').textContent = `Вопрос ${levelIndex + 1}`;
+
+        if (memoryShowTimeout) clearTimeout(memoryShowTimeout);
+        if (schulteTimerInterval) clearInterval(schulteTimerInterval);
+
+        if (level.type === 'puzzle') {
+            showPuzzleQuestion(level);
+        } else if (level.type === 'memory') {
+            showMemoryQuestion(level);
+        } else if (level.type === 'schulte') {
+            showSchulteQuestion(level);
+        } else if (level.type === 'stroop') {
+            showStroopQuestion(level);
+        } else {
+            showPuzzleQuestion(level);
+        }
+    }
+
+    function handleTextAnswer() {
+        if (!gameActive || isProcessingAnswer || !waitingForAnswer) return;
+
+        const answerInput = document.getElementById('answerInput');
+        const answer = answerInput ? answerInput.value.trim() : '';
+
+        if (answer === "") {
+            showTempMessage('Введите ответ', 'error');
+            return;
+        }
+
+        const isCorrect = (answer.toLowerCase() === (currentCorrectAnswer || '').toLowerCase());
+        finalizeAnswer(answer, isCorrect);
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+
+    document.getElementById('submitAnswerBtn').onclick = handleTextAnswer;
+    document.getElementById('answerInput').onkeypress = (e) => {
+        if (e.key === 'Enter') handleTextAnswer();
+    };
+    document.getElementById('restartBtn').onclick = () => location.reload();
+
+    loadLevels();
+</script>
+</body>
+</html>
